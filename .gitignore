@@ -61,3 +61,5 @@ helm/Chart.lock
 helm/charts/mysql-10.2.4.tgz
 helm/charts/tomcat-11.2.19.tgz
 docker/eulogin/eulogin-mockup-config/userDataBase.xml
+docker/eulogin/eulogin-mockup-config/userDataBase.xml
+docker/eulogin/eulogin-mockup-config/userDataBase.xml
