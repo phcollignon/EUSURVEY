@@ -32,8 +32,13 @@ Before running the Docker containers, you need to build the server archive:
    ```bash
    docker-compose build
    ```
+2. Create a shared folder for the EUSurvey files:
+   ```
+   mkdir ~/eusurveytemp
+   chmod 777 ~/eusurveytemp
+   ```
 
-2. Run the Docker containers:
+3. Run the Docker containers:
    ```bash
    docker-compose up -d
    ```
