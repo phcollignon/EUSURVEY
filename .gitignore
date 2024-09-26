@@ -56,12 +56,13 @@ src/main/webapp/WEB-INF/views/version.txt
 
 docker/server/dist/
 src/main/webapp/WEB-INF/views/versionfooter.txt
-docker/eulogin/eulogin-mockup-config/userDataBase.xml
+docker/eulogin/eulogin-mockup-config/
 helm/Chart.lock
-helm/charts/mysql-10.2.4.tgz
-helm/charts/tomcat-11.2.19.tgz
-docker/eulogin/eulogin-mockup-config/userDataBase.xml
-docker/eulogin/eulogin-mockup-config/userDataBase.xml
-docker/eulogin/eulogin-mockup-config/userDataBase.xml
+helm/charts/
 
 src/main/java/com/ec/survey/config/RedisSessionBrowser.java
+docker/update.sh
+helm/clean.sh
+
+
+

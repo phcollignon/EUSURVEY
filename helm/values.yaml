@@ -1,4 +1,5 @@
 tomcat:
+  replicaCount: 2 
   service:
     type: ClusterIP
     ports: 
@@ -10,11 +11,11 @@ tomcat:
     pullPolicy: IfNotPresent
   resources:
     requests:
-      memory: "512Mi"  
-      cpu: "250m"     
-    limits:
-      memory: "1Gi"    
+      memory: "1Gi"  
       cpu: "500m"     
+    limits:
+      memory: "2Gi"    
+      cpu: "1000m"     
   lifecycleHooks:
     postStart:
       exec:
@@ -51,8 +52,23 @@ tomcat:
 
   readinessProbe:
     enabled: false
+  customReadinessProbe:
+    httpGet:
+      path: /eusurvey
+      port: 8080
+    initialDelaySeconds: 120
+    periodSeconds: 5
+    failureThreshold: 3
+
   livenessProbe:
     enabled: false
+  customLivenessProbe:
+    httpGet:
+      path: /eusurvey
+      port: 8080
+    initialDelaySeconds: 180
+    periodSeconds: 10
+    failureThreshold: 3
     
   ingress:
     enabled: true
@@ -114,6 +130,7 @@ mysql:
       character-set-server=UTF8
       slow_query_log=0
       long_query_time=10.0
+      sql_mode = 'NO_ENGINE_SUBSTITUTION'
 
       [client]
       port={{ .Values.primary.containerPorts.mysql }}
@@ -148,3 +165,8 @@ mysql:
         KEY MV_SURVEYS_IND (SURVEYUID,PUBLISHEDANSWERS)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
       SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+redis: 
+  architecture: standalone
+  auth: 
+    enabled: false

@@ -1,6 +1,6 @@
 <userDataBase xmlns="https://ecas.ec.europa.eu/cas/schemas/mockup/db">
 	<user>
-		<authenticationCount>22</authenticationCount>
+		<authenticationCount>24</authenticationCount>
 		<badAuthenticationCount>10</badAuthenticationCount>
 		<cn>Jason BOURNE</cn>
 		<cudGroups>MEDUSA</cudGroups>
@@ -10,14 +10,14 @@
 		<employeeNumber>00000001</employeeNumber>
 		<employeeType>f</employeeType>
 		<firstName>Jason</firstName>
-		<goodAuthenticationCount>12</goodAuthenticationCount>
+		<goodAuthenticationCount>14</goodAuthenticationCount>
 		<internalGroups>OPS-ADMIN</internalGroups>
 		<internalGroups>USER-ADMIN</internalGroups>
 		<internalTelephoneNumber>00002</internalTelephoneNumber>
 		<lastFailureTime>2024-06-13T09:40:02.621+02:00</lastFailureTime>
 		<lastName>BOURNE</lastName>
-		<lastSecureLoginTimes>2024-08-28T15:43:38.499+02:00</lastSecureLoginTimes>
-		<lastSecureLoginTimes>2024-09-19T16:56:37.467+02:00</lastSecureLoginTimes>
+		<lastSecureLoginTimes>2024-09-26T10:26:47.291+02:00</lastSecureLoginTimes>
+		<lastSecureLoginTimes>2024-09-26T10:28:03.791+02:00</lastSecureLoginTimes>
 		<mobilePhone>COMREF:+32480123456</mobilePhone>
 		<objectStatus>a</objectStatus>
 		<organisation>eu.europa.ec</organisation>
@@ -26,7 +26,7 @@
 		<passwordLastChangedTime>2013-12-19T19:29:22.196+01:00</passwordLastChangedTime>
 		<passwordMustChange>N</passwordMustChange>
 		<resetPasswordPermission>N</resetPasswordPermission>
-		<retryCountResetTime>2024-09-19T16:56:37.467+02:00</retryCountResetTime>
+		<retryCountResetTime>2024-09-26T10:28:03.791+02:00</retryCountResetTime>
 		<strongPasswordHash>{ARG2}Ku2i4VQtq3ASwpAmvn8ASD5CF/xzkE2Plqk58bWwS7944EaRm5FPeR8tO1oTMltxF83Y36pQgxvUL90lcvAYPvpcxFr6J86jurgoGmf0ErHu1QXms9ltfb9ACAyTDTVxhdMyZ2eKXYjWrw4CYBGPBUJ5Dc9rw9fnk+UdGwdFAxm624lpjU1rUfdoMegjAn6qA0u4V/KKKBaNUf2nxzAsbukKV1vQw99+1FzcaXDzGp7kZlpkwQnpNgDy2FhgQrpmqgpEDos8/KIHAEQZbQFJ2EospKmifx6K+fanmDkkA0IQQQyrQA1Ag16A7Z1rtceSo4q46Hn2hACDxVnER8klmA==</strongPasswordHash>
 		<tokenCramFailures>3</tokenCramFailures>
 		<tokenCramId>123@eu</tokenCramId>

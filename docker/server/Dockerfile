@@ -1,9 +1,11 @@
-FROM bitnami/tomcat:8.5.100-debian-12-r5
+FROM bitnami/tomcat:9.0.95-debian-12-r0
 
 USER root
 
 RUN apt-get update && \
-    apt-get install -y fontconfig fonts-dejavu && \
+    apt-get install -y \
+    fontconfig \
+    fonts-dejavu &&\
     rm -rf /var/lib/apt/lists/*
 
 COPY ./conf/eulogin.crt eulogin.crt
