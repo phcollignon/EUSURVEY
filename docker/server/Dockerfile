@@ -5,7 +5,11 @@ USER root
 RUN apt-get update && \
     apt-get install -y \
     fontconfig \
-    fonts-dejavu &&\
+    fonts-dejavu \
+    iputils-ping \
+    dnsutils \
+    net-tools \
+    curl && \
     rm -rf /var/lib/apt/lists/*
 
 COPY ./conf/eulogin.crt eulogin.crt
