@@ -25,9 +25,11 @@ services:
       - CATALINA_OPTS="-Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=0.0.0.0:8889" 
       - ALLOW_EMPTY_PASSWORD=yes
     volumes:
-      - type: bind
-        source: ~/eusurveytemp
-        target: /eusurveytemp/
+      - /path/on/host/tmp-instance1:/eusurveytemp/tmp      
+      - /path/on/host/files:/eusurveytemp/files           
+      - /path/on/host/surveys:/eusurveytemp/surveys        
+      - /path/on/host/users:/eusurveytemp/users            
+      - /path/on/host/archive:/eusurveytemp/archive       
     networks:
       - eusurvey-network   
 volumes:
@@ -35,4 +37,4 @@ volumes:
 
 networks:
   eusurvey-network:
-    driver: bridge 
+    driver: bridge
