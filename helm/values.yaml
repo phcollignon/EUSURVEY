@@ -1,3 +1,7 @@
+
+global:
+  defaultStorageClass: "standard"
+
 tomcat:
   replicaCount: 2 
   service:
@@ -22,15 +26,36 @@ tomcat:
         command: ["/bin/sh", "-c", "mv /usr/local/share/eusurvey.war /opt/bitnami/tomcat/webapps/eusurvey.war"]
 
   extraVolumeMounts:
-    - name: usr-local-share-volume  
-      mountPath: /usr/local/share
-    - name: eusurveytemp
-      mountPath: /eusurveytemp
+  - name: usr-local-share-volume  
+    mountPath: /usr/local/share
+  - name: tmp-volume
+    mountPath: /eusurveytemp/tmp
+  - name: eusurvey-files
+    mountPath: /eusurveytemp/files
+  - name: eusurvey-surveys
+    mountPath: /eusurveytemp/surveys
+  - name: eusurvey-users
+    mountPath: /eusurveytemp/users
+  - name: eusurvey-archive
+    mountPath: /eusurveytemp/archive
+
   extraVolumes:
     - name: usr-local-share-volume  
       emptyDir: {}
-    - name: eusurveytemp
+    - name: tmp-volume
       emptyDir: {}
+    - name: eusurvey-files
+      persistentVolumeClaim:
+        claimName: eusurvey-files
+    - name: eusurvey-surveys
+      persistentVolumeClaim:
+        claimName: eusurvey-surveys
+    - name: eusurvey-users
+      persistentVolumeClaim:
+        claimName: eusurvey-users
+    - name: eusurvey-archive
+      persistentVolumeClaim:
+        claimName: eusurvey-archive
 
   initContainers:
     - name: copy-eusurvey-war
@@ -73,10 +98,7 @@ tomcat:
   ingress:
     enabled: true
     annotations:
-      kubernetes.io/ingress.class: nginx  
-      nginx.ingress.kubernetes.io/affinity: "cookie"
-      nginx.ingress.kubernetes.io/session-cookie-name: "route"
-      nginx.ingress.kubernetes.io/session-cookie-hash: "sha1"    
+      kubernetes.io/ingress.class: nginx    
     hostname: eusurvey
     path: /
     pathType: ImplementationSpecific  
@@ -92,8 +114,12 @@ tomcat:
                 name: eusurvey-tomcat  
                 port:
                   number: 8080
-                  
 
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 250Mi
 
 mysql:
   auth:
@@ -108,6 +134,11 @@ mysql:
         value: eusurveyuser
       - name: EUSURVEY_MYSQL_ROOT_PASSWORD
         value: password
+    persistence:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      size: 250Mi
 
     configuration: |-
       [mysqld]
@@ -165,8 +196,38 @@ mysql:
         KEY MV_SURVEYS_IND (SURVEYUID,PUBLISHEDANSWERS)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
       SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED;
+ 
+
 
 redis: 
   architecture: standalone
   auth: 
     enabled: false
+  master:
+    persistence:
+      enabled: true
+      accessModes:
+        - ReadWriteOnce
+      size: 250Mi
+
+persistence:
+  files:
+    enabled: true
+    existingClaim: false
+    accessModes: ["ReadWriteMany"]
+    size: "100Mi"
+  surveys:
+    enabled: true
+    existingClaim: false
+    accessModes: ["ReadWriteMany"]
+    size: "100Mi"
+  users:
+    enabled: true
+    existingClaim: false
+    accessModes: ["ReadWriteMany"]
+    size: "100Mi"
+  archive:
+    enabled: true
+    existingClaim: false
+    accessModes: ["ReadWriteMany"]
+    size: "100Mi"
