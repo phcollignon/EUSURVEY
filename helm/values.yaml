@@ -126,15 +126,12 @@ tomcat:
     enabled: true
     annotations:
       kubernetes.io/ingress.class: nginx    
-    hostname: eusurvey
-    path: /
     pathType: ImplementationSpecific  
     ingressClassName: nginx
     extraRules:
-    - host: eusurvey
-      http:
+    - http:
         paths:
-          - path: /
+          - path: /eusurvey
             pathType: ImplementationSpecific
             backend:
               service:
@@ -146,7 +143,7 @@ tomcat:
     enabled: true
     accessModes:
       - ReadWriteOnce
-    size: 250Mi
+    size: 5Gi
 
 mysql:
   auth:
@@ -165,7 +162,7 @@ mysql:
       enabled: true
       accessModes:
         - ReadWriteOnce
-      size: 250Mi
+      size: 5Gi
 
     configuration: |-
       [mysqld]
@@ -235,26 +232,70 @@ redis:
       enabled: true
       accessModes:
         - ReadWriteOnce
-      size: 250Mi
+      size: 2Gi
+
+phpmyadmin:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      nginx.ingress.kubernetes.io/rewrite-target: /$2
+      nginx.ingress.kubernetes.io/use-regex: "true"
+    pathType: ImplementationSpecific  
+    ingressClassName: nginx
+    extraRules:
+    - http:
+        paths:
+          - path: /phpmyadmin(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: eusurvey-phpmyadmin  
+                port:
+                  number: 80
+  extraEnvVars:
+    - name: PMA_ABSOLUTE_URI
+      value: "http://10.178.57.74/phpmyadmin/"
+  db:
+    host: eusurvey-mysql
+    port: 3306
+    existingSecret: ""
+    database: eusurveydb
+    username: eusurveyuser
+    password: eusurveyuser
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+  persistence:
+    enabled: false
+
 
 persistence:
   files:
     enabled: true
     existingClaim: false
     accessModes: ["ReadWriteMany"]
-    size: "100Mi"
+    size: "5Gi"
   surveys:
     enabled: true
     existingClaim: false
     accessModes: ["ReadWriteMany"]
-    size: "100Mi"
+    size: "5Gi"
   users:
     enabled: true
     existingClaim: false
     accessModes: ["ReadWriteMany"]
-    size: "100Mi"
+    size: "5Gi"
   archive:
     enabled: true
     existingClaim: false
     accessModes: ["ReadWriteMany"]
-    size: "100Mi"
+    size: "5Gi"
