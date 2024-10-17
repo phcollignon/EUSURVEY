@@ -3,7 +3,7 @@ global:
   defaultStorageClass: "standard"
 
 commonTomcatConfig: &commonTomcatConfig
-  replicaCount: 2
+  replicaCount: 3
   deployment:
     type: statefulset
   podManagementPolicy: OrderedReady
@@ -141,7 +141,7 @@ commonTomcatConfig: &commonTomcatConfig
     httpGet:
       path: /eusurvey
       port: 8080
-    initialDelaySeconds: 120
+    initialDelaySeconds: 60
     periodSeconds: 5
     failureThreshold: 3
 
@@ -152,7 +152,7 @@ commonTomcatConfig: &commonTomcatConfig
       path: /eusurvey
       port: 8080
     initialDelaySeconds: 180
-    periodSeconds: 10
+    periodSeconds: 3
     failureThreshold: 3
     
   ingress:
