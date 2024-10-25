@@ -1,23 +1,31 @@
+{{- if .Values.hpa.enabled }}
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: my-deployment-hpa
+  name: {{ include "common.names.fullname" . }}-tomcat-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: StatefulSet
-    name: eusurvey-tomcat
-  minReplicas: 1
-  maxReplicas: 4
+    name: {{ include "common.names.fullname" . }}-tomcat
+  minReplicas: {{ .Values.hpa.minReplicas }}
+  maxReplicas: {{ .Values.hpa.maxReplicas }}
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 50
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.hpa.cpuTargetAverageUtilization }}
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60
-
-
+      stabilizationWindowSeconds: {{ .Values.hpa.behavior.scaleUp.stabilizationWindowSeconds }}
+    scaleDown:
+      stabilizationWindowSeconds: {{ .Values.hpa.behavior.scaleDown.stabilizationWindowSeconds }}
+      policies:
+{{- range .Values.hpa.behavior.scaleDown.policies }}
+        - type: {{ .type }}
+          value: {{ .value }}
+          periodSeconds: {{ .periodSeconds }}
+{{- end }}
+{{- end }}
