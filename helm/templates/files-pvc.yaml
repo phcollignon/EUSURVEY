@@ -18,4 +18,9 @@ spec:
     requests:
       storage: {{ .Values.persistence.files.size | quote }}
   {{- include "common.storage.class" (dict "persistence" .Values.persistence.files "global" .Values.global) | nindent 2 }}
+  {{- if .Values.persistence.archive.retentionPolicy }}
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: {{ .Values.persistence.archive.retentionPolicy.whenDeleted | quote }}
+    whenScaled: {{ .Values.persistence.archive.retentionPolicy.whenScaled | quote }}
+  {{- end }}
 {{- end -}}
