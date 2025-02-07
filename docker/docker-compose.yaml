@@ -9,8 +9,8 @@ services:
       - '3306:3306'
     volumes:
       - eusurvey-mysql-data:/bitnami/mysql/data
-      - ./mysql/init-db/:/docker-entrypoint-initdb.d/
-      - ./mysql/my.cnf:/opt/bitnami/mysql/conf/my_custom.cnf  
+      - ./init-db/:/docker-entrypoint-initdb.d/
+      - ./my.cnf:/opt/bitnami/mysql/conf/my_custom.cnf  
     networks:
       - eusurvey-network
 

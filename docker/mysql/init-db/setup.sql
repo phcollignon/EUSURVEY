@@ -1,9 +1,11 @@
 CREATE DATABASE IF NOT EXISTS eusurveydb CHARACTER SET utf8 COLLATE utf8_general_ci;
 CREATE DATABASE IF NOT EXISTS eusurveyreportdb CHARACTER SET utf8 COLLATE utf8_general_ci;
-CREATE USER 'eusurveyuser'@'%' IDENTIFIED BY 'eusurveyuser'; 
+
+CREATE USER 'eusurveyuser'@'%' IDENTIFIED WITH 'caching_sha2_password' BY 'eusurveyuser'; 
 GRANT ALL PRIVILEGES ON eusurveydb.* TO 'eusurveyuser'@'%';
 GRANT EVENT ON *.* TO 'eusurveyuser'@'%';
-CREATE USER 'eusurveyruser'@'%' IDENTIFIED BY 'eusurveyruser'; 
+
+CREATE USER 'eusurveyruser'@'%' IDENTIFIED WITH 'caching_sha2_password' BY 'eusurveyruser'; 
 GRANT ALL PRIVILEGES ON eusurveyreportdb.* TO 'eusurveyruser'@'%';
 SET GLOBAL event_scheduler = ON;
 SET GLOBAL log_bin_trust_function_creators = 1;

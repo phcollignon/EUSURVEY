@@ -1,0 +1,26 @@
+version: '3.8'
+services:
+  eusurvey-mysql:
+    container_name: eusurvey-mysql
+    hostname: eusurvey-mysql
+    image: 'bitnami/mysql:8.0.35-debian-11-r3'
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_USER=eusurveyuser
+      - MYSQL_PASSWORD=eusurveyuser
+
+    ports:
+      - '3306:3306'
+    volumes:
+      - eusurvey-mysql-data:/bitnami/mysql/data
+      - ./init-db/:/docker-entrypoint-initdb.d/
+      - ./my.cnf:/opt/bitnami/mysql/conf/my_custom.cnf  
+    networks:
+      - eulogin_eusurvey-network 
+volumes:
+  eusurvey-mysql-data:
+
+networks:
+  eulogin_eusurvey-network:
+    external: true
+
