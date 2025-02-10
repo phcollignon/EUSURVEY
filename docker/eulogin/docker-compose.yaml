@@ -16,9 +16,16 @@ services:
       - ./eulogin-mockup-config:/data/ecas-mock-server-shared
     stdin_open: true
     tty: true
+   # networks:
+   #   - docker_eusurvey-network
     networks:
-      - docker_eusurvey-network
-networks:
-  docker_eusurvey-network:
+      - eusurvey-network 
+#networks:
+#  docker_eusurvey-network:
 
-    external: true
+#    external: true
+
+networks:
+  eusurvey-network:
+    driver: bridge
+
