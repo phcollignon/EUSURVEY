@@ -737,7 +737,19 @@
                                  <include>spring.properties</include>
                             </includes>
                         </resource>
+						<resource>
+							<!-- Copies src/main/config/environment/log4j.xml to  -->
+							<!-- war/WEB-INF/classes/log4j.xml -->
+							<!-- Standard out logs are needed for Docker and Kubernetes environments -->
+							<directory>src/main/config/${environment}</directory>
+							<targetPath>WEB-INF/classes</targetPath>
+							<includes>
+								<include>log4j.xml</include>
+							</includes>
+						</resource>
 					</webResources>
+
+					
 					<warSourceExcludes>/WEB-INF/spring.propertie</warSourceExcludes>
 					<warName>eusurvey</warName>
 				</configuration>
