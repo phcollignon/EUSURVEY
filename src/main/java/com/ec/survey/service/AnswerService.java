@@ -11,6 +11,7 @@ import com.ec.survey.model.attendees.Attendee;
 import com.ec.survey.model.attendees.Attribute;
 import com.ec.survey.model.attendees.AttributeName;
 import com.ec.survey.model.attendees.Invitation;
+import com.ec.survey.model.chargeback.SubmittedContribution;
 import com.ec.survey.model.delphi.DelphiMedian;
 import com.ec.survey.model.selfassessment.SAScore;
 import com.ec.survey.model.selfassessment.SAScoreCard;
@@ -2317,6 +2318,9 @@ public class AnswerService extends BasicService {
 	public Date getNewestAnswerDate(int surveyId) {
 		Session session = sessionFactory.getCurrentSession();
 		List<Integer> allVersions = surveyService.getAllPublishedSurveyVersions(surveyId);
+		
+		if (allVersions.isEmpty()) return null;
+		
 		Query query = session.createQuery("SELECT max(a.updateDate) FROM AnswerSet a WHERE a.surveyId IN ("
 				+ StringUtils.collectionToCommaDelimitedString(allVersions) + ") AND a.isDraft = 0");
 		return (Date) query.uniqueResult();
@@ -2891,5 +2895,16 @@ public class AnswerService extends BasicService {
 			}
 		}
 		
+	}
+
+	@Transactional
+	public void chargeSubmission(AnswerSet answerSet) {
+		Session session = sessionFactory.getCurrentSession();
+		SubmittedContribution sc = new SubmittedContribution();
+		sc.setAnswerSetID(answerSet.getId());
+		sc.setSurveyUID(answerSet.getSurvey().getUniqueId());
+		sc.setSubmitted(new Date());
+		sc.setOrganisation(answerSet.getSurvey().getOrganisation());
+		session.save(sc);
 	}
 }

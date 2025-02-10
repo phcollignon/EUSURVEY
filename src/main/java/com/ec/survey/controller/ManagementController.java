@@ -204,37 +204,6 @@ public class ManagementController extends BasicController {
 		return new ModelAndView("redirect:/" + shortname + "/management/overview?repairedlabels=" + repairedlabels);
 	}
 
-	@RequestMapping(value = "/checkInternetConnection", method = { RequestMethod.GET, RequestMethod.HEAD })
-	public ModelAndView checkInternetConnection(@PathVariable String shortname, HttpServletRequest request,
-			Locale locale) {
-
-		String message = "";
-
-		try {
-
-			sessionService.initializeProxy();
-
-			URL url = new URL("http://www.google.de/images/srpr/logo4w.png");
-			URLConnection connection = url.openConnection();
-
-			if (connection.getContentLength() == -1) {
-				message += "connection.getContentLength() == -1<br />";
-			} else if (connection.getContent() instanceof InputStream) {
-				InputStream is = (InputStream) connection.getContent();
-				StringWriter writer = new StringWriter();
-				IOUtils.copy(is, writer);
-				message += writer.toString();
-			} else {
-				message += connection.getContent();
-			}
-		} catch (IOException e) {
-			logger.error("Failed to open a connection:" + e.getLocalizedMessage(), e);
-			message += "connection failed: " + e.getLocalizedMessage() + "<br />";
-		}
-
-		return new ModelAndView("error/info", Constants.MESSAGE, message);
-	}
-
 	public ModelAndView clearchanges(String shortname, HttpServletRequest request, Locale locale) throws Exception {
 		Form form;
 		form = sessionService.getForm(request, shortname, false, false);
@@ -410,54 +379,14 @@ public class ManagementController extends BasicController {
 			throw new ForbiddenURLException();
 		}
 
-		boolean acceptMissingFiles = request.getParameter("acceptMissingFiles") != null
-				&& request.getParameter("acceptMissingFiles").equalsIgnoreCase("true");
-		boolean fromforms = request.getParameter("fromforms") != null
-				&& request.getParameter("fromforms").equalsIgnoreCase("true");
-
 		if (answers != null && answers.equalsIgnoreCase("true") && delete.equalsIgnoreCase("true")) {
-			if (!acceptMissingFiles) {
-				// check for missing files
-				Map<String, String> missingFiles = fileService.getMissingFiles(survey.getUniqueId());
-				if (missingFiles.size() > 0) {
-					ModelAndView result = new ModelAndView("management/overview", "form", form);
-
-					if (fromforms) {
-						SurveyFilter filter = sessionService.getSurveyFilter(request, true);
-						Paging<Survey> paging = new Paging<>();
-						paging.setItemsPerPage(10);
-						int numberOfSurveys = 0;
-						paging.setNumberOfItems(numberOfSurveys);
-						paging.moveTo("1");
-
-						SqlPagination sqlPagination = paginationMapper.toSqlPagination(paging);
-						List<Survey> surveys = surveyService.getSurveysIncludingTranslationLanguages(filter,
-								sqlPagination, false, false);
-						paging.setItems(surveys);
-
-						result = new ModelAndView("forms/forms", "paging", paging);
-						result.addObject(Constants.FILTER, filter);
-
-						if (filter.getGeneratedFrom() != null || filter.getGeneratedTo() != null
-								|| filter.getStartFrom() != null || filter.getStartTo() != null
-								|| filter.getEndFrom() != null || filter.getEndTo() != null) {
-							result.addObject("showDates", true);
-						}
-					}
-
-					result.addObject("missingFilesSurvey", survey.getShortname());
-					result.addObject("missingFiles", missingFiles);
-					return result;
-				}
-			}
-
-			if (!archiveSurvey(survey, u)) {
+			if (!archiveService.archiveSurvey(survey, u)) {
 				throw new MessageException("archiving failed!");
 			}
 
 			request.getSession().removeAttribute("sessioninfo");
 
-			return new ModelAndView("redirect:/dashboard?archived=" + shortname);
+			return new ModelAndView("redirect:/administration/surveysearch");
 		}
 
 		java.io.File zip = surveyService.exportSurvey(shortname, surveyService,
@@ -855,11 +784,26 @@ public class ManagementController extends BasicController {
 
 		return updateSurvey(form, request, false, locale);
 	}
-	
-	private boolean checkSendOrganisationValidationEmail(Survey survey, Map<String, String[]> parameterMap, User user) throws NamingException, MessageException {
-		survey.setOrganisation(Tools.filterHTML(parameterMap.get("organisation")[0]));
-		survey.setValidator(Tools.filterHTML(parameterMap.get("validator")[0]));
-		
+
+	@RequestMapping(value = "/sendOrganisationValidationReminder", method = { RequestMethod.GET, RequestMethod.HEAD })
+	public @ResponseBody String sendOrganisationValidationReminder(@PathVariable String shortname, HttpServletRequest request) throws Exception {
+		User u = sessionService.getCurrentUser(request);
+		int surveyId = Integer.parseInt(request.getParameter("surveyId"));
+		Survey survey = surveyService.getSurvey(surveyId);
+
+		try {
+			boolean sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(survey, u);
+			if (sendOrganisationValidationEmail) {
+				surveyService.sendOrganisationValidationEmail(surveyId, u);
+				return "success";
+			}
+			return "error";
+		} catch (MessageException e) {
+			return e.getLocalizedMessage();
+		}
+	}
+
+	private boolean checkSendOrganisationValidationEmail(Survey survey, User user) throws NamingException, MessageException {
 		//check if validator belongs to correct domain
 		Set<String> externalOrganisations = new HashSet<String>(Arrays.asList("CITIZEN", "OTHER", "PRIVATEORGANISATION", "PUBLICADMINISTRATION"));
 		if (user.isExternal() || user.getType().equalsIgnoreCase(User.SYSTEM)) {
@@ -940,8 +884,10 @@ public class ManagementController extends BasicController {
 				}
 
 				if (result != null && result.getSurvey() != null) {
-					
-					boolean sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(result.getSurvey(), parameters, u);	
+
+					result.getSurvey().setOrganisation(Tools.filterHTML(parameters.get("organisation")[0]));
+					result.getSurvey().setValidator(Tools.filterHTML(parameters.get("validator")[0]));
+					boolean sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(result.getSurvey(), u);
 					
 					int id = surveyService.importSurvey(result, sessionService.getCurrentUser(request), true);
 					activityService.log(ActivityRegistry.ID_SURVEY_IMPORTED, null, Integer.toString(id), u.getId(), result.getSurvey().getUniqueId());
@@ -1038,8 +984,10 @@ public class ManagementController extends BasicController {
 				
 				Survey copy = original.copy(surveyService, sessionService.getCurrentUser(request), fileDir, false, -1,
 						-1, false, false, false, newShortName, UUID.randomUUID().toString());
-				
-				boolean sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(copy, parameterMap, u);				
+
+				copy.setOrganisation(Tools.filterHTML(parameterMap.get("organisation")[0]));
+				copy.setValidator(Tools.filterHTML(parameterMap.get("validator")[0]));
+				boolean sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(copy, u);
 
 				if (copy.getIsEVote()) {
 					//change all multiple choice eVote Lists to the right style
@@ -1346,7 +1294,9 @@ public class ManagementController extends BasicController {
 			uploadedSurvey.setShortname(Tools.escapeHTML(parameterMap.get(Constants.SHORTNAME)[0]));
 			uploadedSurvey.setTitle(Tools.filterHTML(parameterMap.get("title")[0]));
 			
-			sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(uploadedSurvey, parameterMap, u);
+			uploadedSurvey.setOrganisation(Tools.filterHTML(parameterMap.get("organisation")[0]));
+			uploadedSurvey.setValidator(Tools.filterHTML(parameterMap.get("validator")[0]));
+			sendOrganisationValidationEmail = checkSendOrganisationValidationEmail(uploadedSurvey, u);
 
 			Language objLang = surveyService.getLanguage(parameterMap.get("surveylanguage")[0]);
 			if (objLang == null) {
@@ -4001,7 +3951,9 @@ public class ManagementController extends BasicController {
 					luxListVotes += v;
 				}
 				
-				listResult.setLuxListVotes(luxListVotes);
+				if (form.getSurvey().geteVoteTemplate().equals("l")) {
+					listResult.setLuxListVotes(luxListVotes);
+				}
 			}
 			
 			SeatCounting result = eVoteService.getCounting(form.getSurvey().getUniqueId(), results, resources, locale, true);
@@ -4707,11 +4659,7 @@ public class ManagementController extends BasicController {
 			return null;
 		}
 
-		Survey s = surveyService.getSurvey(Integer.parseInt(id), false, true);
-
-		Survey survey = surveyService.getSurveyInOriginalLanguage(s.getId(), s.getShortname(), s.getUniqueId());
-
-		surveyService.initializeSurvey(survey);
+		Survey s = surveyService.getSurvey(Integer.parseInt(id));
 
 		ResultFilter filter = export.getResultFilter().copy();
 
@@ -4719,7 +4667,7 @@ public class ManagementController extends BasicController {
 			filter.setLanguages(null);
 		}
 
-		ModelAndView results = results(survey, new HashMap<>(), null, survey.getIsDraft(), export.isAllAnswers(),
+		ModelAndView results = results(s, new HashMap<>(), null, s.getIsDraft(), export.isAllAnswers(),
 				filter, true);
 
 		Publication publication = new Publication();

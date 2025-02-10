@@ -5,6 +5,8 @@ import com.ec.survey.exception.InvalidURLException;
 import com.ec.survey.model.*;
 import com.ec.survey.model.survey.Survey;
 import com.ec.survey.service.ReportingService.ToDoItem;
+import com.ec.survey.tools.ArchiveExecutor;
+import com.ec.survey.tools.ArchiveFlagExecutor;
 import com.ec.survey.tools.Constants;
 import com.ec.survey.tools.CreateAllOLAPTablesExecutor;
 import com.ec.survey.tools.FileUpdater;
@@ -14,7 +16,6 @@ import com.ec.survey.tools.RecreateAllOLAPTablesExecutor;
 import com.ec.survey.tools.Tools;
 import com.ec.survey.tools.UpdateAllOLAPTablesExecutor;
 import com.ec.survey.tools.WeakAuthenticationException;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.poi.hssf.usermodel.HSSFRow;
 import org.apache.poi.hssf.usermodel.HSSFSheet;
@@ -186,6 +187,22 @@ public class AdministrationController extends BasicController {
 	public ModelAndView startfileworker(HttpServletRequest request) {
 		fileWorker.run();
 		return new ModelAndView("error/info", Constants.MESSAGE, "file worker started");
+	}
+	
+	@RequestMapping(value = "/startarchiving", method = {RequestMethod.GET, RequestMethod.HEAD})
+	public ModelAndView startarchiving(HttpServletRequest request) {
+		ArchiveExecutor executor = (ArchiveExecutor) context.getBean("archiveExecutor");
+		taskExecutor.execute(executor);		
+		
+		return new ModelAndView("error/info", Constants.MESSAGE, "archive executor started");
+	}
+	
+	@RequestMapping(value = "/startflagging", method = {RequestMethod.GET, RequestMethod.HEAD})
+	public ModelAndView startflagging(HttpServletRequest request) {
+		ArchiveFlagExecutor executor = (ArchiveFlagExecutor) context.getBean("archiveFlagExecutor");
+		taskExecutor.execute(executor);		
+		
+		return new ModelAndView("error/info", Constants.MESSAGE, "archive flag executor started");
 	}
 	
 	@RequestMapping(value = "/deletetempfiles", method = {RequestMethod.GET, RequestMethod.HEAD})
@@ -426,12 +443,33 @@ public class AdministrationController extends BasicController {
 	}
 	
 	
-	@RequestMapping(value = "/organisationreport/{code}/{format}/{year}/{month}", method = {RequestMethod.GET, RequestMethod.HEAD})
-	public ResponseEntity<byte[]> organisationReport(HttpServletRequest request, HttpServletResponse response, @PathVariable String code, @PathVariable String format, @PathVariable int year, @PathVariable int month) throws ForbiddenURLException, IOException {
+	@RequestMapping(value = "/organisationreport/{code}/{format}/{year}/{month}/{monthEnd}", method = {RequestMethod.GET, RequestMethod.HEAD})
+	public ResponseEntity<byte[]> organisationReport(HttpServletRequest request, HttpServletResponse response, @PathVariable String code, @PathVariable String format, @PathVariable int year, @PathVariable int month, @PathVariable int monthEnd) throws ForbiddenURLException, IOException {
 		if (!isChargeBackeEnabled()) throw new ForbiddenURLException();
 		
-		List<List<String>> surveys = surveyService.getSurveysByOrganisation(code, year, month);
-		
+		if (format.equalsIgnoreCase("csv")) {
+			List<List<String>> surveys = surveyService.getSurveysByOrganisation(code, year, month);
+			response.setContentType("text/csv");
+			response.setHeader("Content-Disposition", "attachment;filename=report.csv");
+			response.getWriter().print(organisationReportCSV(surveys));
+			response.getWriter().flush();
+		} else if (format.equalsIgnoreCase("json")) {
+			int min = 0;
+			String minPublished = request.getParameter("min");
+			if (minPublished != null && minPublished .length() > 0) {
+				min = Integer.parseInt(minPublished);
+			}			
+			
+			response.setContentType("text/json");
+			response.setHeader("Content-Disposition", "attachment;filename=report.json");
+			response.getWriter().print(surveyService.organisationReportJSON(code, year, month, monthEnd, min));
+			response.getWriter().flush();
+		}
+
+		return null;
+	}
+	
+	private String organisationReportCSV(List<List<String>> surveys) {
 		StringBuilder csv = new StringBuilder();
 		
 		for (List<String> survey : surveys) {
@@ -453,11 +491,6 @@ public class AdministrationController extends BasicController {
 			csv.append("\n");
 		}
 		
-		response.setContentType("text/csv");
-		response.setHeader("Content-Disposition", "attachment;filename=export.csv");
-		response.getWriter().print(csv.toString());
-		response.getWriter().flush();
-
-		return null;
+		return csv.toString();
 	}
 }

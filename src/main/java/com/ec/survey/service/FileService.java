@@ -71,9 +71,9 @@ public class FileService extends BasicService {
 		Session session = sessionFactory.getCurrentSession();
 		return (File) session.get(File.class, id);
 	}
-
+	
 	@Transactional(readOnly = true)
-	public File get(String uid) throws FileNotFoundException {
+	public File get(String uid, boolean throwExceptionIfNotFound) throws FileNotFoundException {
 
 		if (uid.contains(Constants.PATH_DELIMITER)) {
 			// the new file system structure has the survey uid as subfolder
@@ -85,10 +85,18 @@ public class FileService extends BasicService {
 		@SuppressWarnings("unchecked")
 		List<File> list = query.list();
 		if (list.isEmpty()) {
+			if (!throwExceptionIfNotFound) return null;
+			
 			throw new FileNotFoundException("No file found for uid " + uid);
 		}
 
 		return list.get(0);
+	}
+
+	@Transactional(readOnly = true)
+	public File get(String uid) throws FileNotFoundException {
+
+		return get(uid, true);
 	}
 
 	@Transactional(readOnly = true)
@@ -1296,6 +1304,25 @@ public class FileService extends BasicService {
 		c.init(files, filter, user.getEmail());
 		getPool().execute(c);
 	}
+	
+	
+	public boolean validateFilesPath(String path) {
+		// black list for forbidden characters
+		if (path.contains("..")) return false;
+		if (path.contains("*")) return false;
+		
+		// workaround for Windows systems
+		java.io.File surveysDirFile = new java.io.File(surveysDir);
+		java.io.File usersDirFile = new java.io.File(usersDir);
+		java.io.File archiveDirFile = new java.io.File(archiveDir);		
+		
+		// white list for allowed root folders
+		if (path.startsWith(surveysDirFile.getAbsolutePath())) return true;		
+		if (path.startsWith(usersDirFile.getAbsolutePath())) return true;
+		if (path.startsWith(archiveDirFile.getAbsolutePath())) return true;
+		
+		return false;
+	}
 
 	public int deleteAll(FileFilter filter, String[] files) throws Exception {
 		int counter = 0;
@@ -1309,7 +1336,12 @@ public class FileService extends BasicService {
 				}
 			}
 		} else {
-			for (String path : files) {				
+			for (String path : files) {
+				
+				if (!validateFilesPath(path)) {
+					throw new MessageException("Invalid path found");
+				}
+				
 				if (Files.deleteIfExists(Paths.get(path)))
 				{
 					counter++;

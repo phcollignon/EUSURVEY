@@ -142,7 +142,7 @@ public class SurveyExportHelper {
 				if (image.getUrl() != null && !image.getUrl().contains(sessionService.getContextPath() + "/resources/"))
 				{
 					String fileUID = image.getUrl().substring( image.getUrl().lastIndexOf(Constants.PATH_DELIMITER)+1);
-					File f = fileService.get(fileUID);
+					File f = fileService.get(fileUID, false);
 					if (f != null)
 					{
 						os.putArchiveEntry(new ZipArchiveEntry(fileUID + ".file"));
@@ -217,7 +217,7 @@ public class SurveyExportHelper {
 	    	try {
 				String uid = url.substring(url.lastIndexOf(Constants.PATH_DELIMITER) + 1);
 
-				File fi = fileService.get(uid);
+				File fi = fileService.get(uid, false);
 				if (fi != null) {
 					os.putArchiveEntry(new ZipArchiveEntry(uid + ".file"));
 					IOUtils.copy(new FileInputStream(getFileForObject(fi, session, fileService)), os);
@@ -320,11 +320,11 @@ public class SurveyExportHelper {
 			    }
 		    }
 
-		    List<Translations> translations = translationService.getTranslationsForSurvey(survey.getId(), true);
+		    List<Translations> translations = translationService.getTranslationsForSurvey(survey.getId(), false);
 			addObjectAsFileToOutputStream(translations, "translations.eus", os, session, fileService);
 		    
 		    if (activeSurvey != null) {
-		    	translations = translationService.getTranslationsForSurvey(activeSurvey.getId(), true);
+		    	translations = translationService.getTranslationsForSurvey(activeSurvey.getId(), false);
 				addObjectAsFileToOutputStream(translations, "translations-active.eus", os, session, fileService);
 			    
 			    if (answers) {
@@ -333,7 +333,7 @@ public class SurveyExportHelper {
 			    	for (Integer id : allsurveys) {
 						if (!id.equals(survey.getId()) && !id.equals(activeSurvey.getId()))
 						{
-							translations = translationService.getTranslationsForSurvey(id, true);
+							translations = translationService.getTranslationsForSurvey(id, false);
 							addObjectAsFileToOutputStream(translations, "translations-active-" + id + ".eus", os,
 									session, fileService);
 						}

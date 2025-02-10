@@ -492,7 +492,7 @@ public class SurveyHelper {
 						invisibleElements.add(question.getUniqueId());
 					}
 					
-					if (!(element instanceof Matrix) && !question.getOptional() && answers.isEmpty() && found) {
+					if (!(element instanceof Matrix || parentElement instanceof Matrix) && !question.getOptional() && answers.isEmpty() && found) {
 						result.put(element,
 								resources.getMessage("validation.required", null, "This field is required.", locale));
 					} else if (!(element instanceof Matrix) && !found && !answers.isEmpty()) {
@@ -5611,6 +5611,9 @@ public class SurveyHelper {
 					List<String> answerTitles = rankingQuestion.getAnswerWithStrippedTitleNoEscape(answerValue);
 					return String.join("; ", answerTitles);
 				} else if (question instanceof ChoiceQuestion) {
+					if (answerValue.equalsIgnoreCase("EVOTE-ALL")) {
+						return "EVOTE-ALL";
+					}
 					int possibleAnswerId = Integer.parseInt(answerValue);
 					ChoiceQuestion choicequestion = (ChoiceQuestion) question;
 					if (choicequestion.getPossibleAnswer(possibleAnswerId) != null) {

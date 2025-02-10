@@ -3,18 +3,26 @@ package com.ec.survey.service;
 import com.ec.survey.exception.MessageException;
 import com.ec.survey.model.Archive;
 import com.ec.survey.model.ArchiveFilter;
-import com.ec.survey.model.administration.GlobalPrivilege;
+import com.ec.survey.model.Export;
+import com.ec.survey.model.Form;
+import com.ec.survey.model.ResultFilter;
+import com.ec.survey.model.Export.ExportFormat;
+import com.ec.survey.model.Export.ExportState;
+import com.ec.survey.model.Export.ExportType;
 import com.ec.survey.model.administration.User;
+import com.ec.survey.model.survey.Element;
 import com.ec.survey.model.survey.Survey;
 import com.ec.survey.tools.Constants;
 import com.ec.survey.tools.ConversionTools;
 import com.ec.survey.tools.ImportResult;
 import com.ec.survey.tools.SurveyExportHelper;
 import org.hibernate.query.Query;
+import org.apache.commons.io.FileUtils;
 import org.hibernate.Session;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
@@ -31,6 +39,9 @@ public class ArchiveService extends BasicService {
 
 	@Autowired
 	private SqlQueryService sqlQueryService;
+	
+	@Resource(name="pdfService")
+	private PDFService pdfService;
 
 	@Transactional(readOnly = false)
 	public void update(Archive archive) {
@@ -122,10 +133,16 @@ public class ArchiveService extends BasicService {
 			if (result != null && result.getSurvey() != null) {
 				Survey existing = null;
 				if (alias != null && alias.length() > 0) {
-					existing = surveyService.getSurvey(alias, true, false, false, false, null, true, false);
+					existing = surveyService.getSurvey(alias, true, false, false, false, null, true, false, false, false);
 				} else {
-					existing = surveyService.getSurvey(result.getSurvey().getShortname(), true, false, false, false,
-							null, true, false);
+					existing = surveyService.getSurvey(result.getSurvey().getShortname(), true, false, false, false, null, true, false, false, false);
+				}
+				
+				if (existing != null && existing.getIsDeleted()) {
+					// the survey still exists in the database
+					surveyService.unmarkAsArchived(existing.getUniqueId());
+					delete(archive);
+					return surveyService.getSurvey(existing.getId());
 				}
 
 				if (existing != null) {
@@ -249,15 +266,6 @@ public class ArchiveService extends BasicService {
 		return ConversionTools.getValue(query.uniqueResult());
 	}
 
-	@Transactional(readOnly = true)
-	public List<Archive> getArchivesToRestart() {
-		Session session = sessionFactory.getCurrentSession();
-		Query query = session.createQuery("FROM Archive a WHERE a.finished = false AND a.error IS NULL");
-		@SuppressWarnings("unchecked")
-		List<Archive> result = query.list();
-		return result;
-	}
-
 	@Transactional(readOnly = false)
 	public void markRestoring(Archive archive) {
 		archive.setRestoring(true);
@@ -268,6 +276,69 @@ public class ArchiveService extends BasicService {
 	public void unmarkRestoring(Archive archive) {
 		archive.setRestoring(false);
 		update(archive);
+	}
+	
+	@Transactional(readOnly = false)
+	public boolean archiveSurvey(Survey survey, User u) throws IOException {
+		logger.info("start archiving of survey " + survey.getId()); 
+		Archive archive = new Archive();
+		archive.setArchived(new Date());
+		archive.setCreated(survey.getCreated());
+
+		String title = ConversionTools.removeHTML(survey.getTitle(), true).replace("\"", "'");
+		if (title.length() > 250)
+			title = title.substring(0, 250) + "...";
+
+		archive.setSurveyTitle(title);
+		archive.setSurveyUID(survey.getUniqueId());
+		archive.setReplies(answerService.getNumberOfAnswerSetsPublished(survey.getShortname(), survey.getUniqueId()));
+
+		archive.setSurveyHasUploadedFiles(survey.getHasUploadElement());
+
+		archive.setSurveyShortname(survey.getShortname());
+		archive.setOwner(survey.getOwner().getName());
+		archive.setUserId(u.getId());
+		StringBuilder langs = new StringBuilder();
+		if (survey.getTranslations() != null) {
+			for (String s : survey.getTranslations()) {
+				langs.append(s);
+			}
+		}
+		archive.setLanguages(langs.toString());
+		archiveService.add(archive);
+		
+		surveyService.markAsArchived(survey.getUniqueId());
+		
+		return true;
+	}
+	
+	@Transactional
+	public boolean hasArchivingFailed(String shortname) {
+		Session session = sessionFactory.getCurrentSession();
+		Query query = session.createQuery(
+				"SELECT id FROM Archive a WHERE a.surveyShortname = :shortname and a.error IS NOT NULL")
+				.setString(Constants.SHORTNAME, shortname);
+
+		@SuppressWarnings("unchecked")
+		List<Archive> result = query.setMaxResults(1).list();
+
+		return !result.isEmpty();
+	}
+	
+	@Transactional
+	public Archive getActiveArchive(String shortname) {
+		Session session = sessionFactory.getCurrentSession();
+		Query query = session.createQuery(
+				"FROM Archive a WHERE a.surveyShortname = :shortname and a.finished = false AND a.error IS NULL")
+				.setString(Constants.SHORTNAME, shortname);
+
+		@SuppressWarnings("unchecked")
+		List<Archive> result = query.list();
+
+		if (!result.isEmpty())
+			return result.get(0);
+
+		return null;
 	}
 
 	@Transactional
@@ -303,5 +374,126 @@ public class ArchiveService extends BasicService {
 		List<Archive> result = query.list();
 
 		return result;
+	}
+	
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
+	public void createArchive(Survey survey, User user, Archive archive) throws Exception
+	{
+		Session session = sessionFactory.getCurrentSession();
+		logger.info("starting archiving of survey " + survey.getShortname());
+		
+		java.io.File folder = fileService.getArchiveFolder(survey.getUniqueId());		
+		java.io.File zip = surveyService.exportSurvey(survey.getShortname(), surveyService, true);				
+		java.io.File target = new java.io.File(folder.getPath() + Constants.PATH_DELIMITER + survey.getUniqueId());
+				
+		if (folder.exists())
+		{
+			FileUtils.deleteDirectory(folder);
+		}
+		
+		FileUtils.copyFile(zip, target);
+		
+		Survey published = surveyService.getSurvey(survey.getShortname(), false, false, false, true, survey.getLanguage().getCode(), true, false);
+		
+		if (published != null) 
+		{
+			logger.info("archiving PDF of survey " + survey.getShortname());			
+			pdfService.createSurveyPDF(published, published.getLanguage().getCode(), new java.io.File(folder.getPath() + Constants.PATH_DELIMITER + published.getUniqueId() + ".pdf"));
+			
+			Form form = new Form();
+			form.setSurvey(published);
+			
+			ResultFilter resultFilter = new ResultFilter();
+			resultFilter.setSurveyId(published.getId());
+			for (Element element : published.getElementsRecursive(false))
+			{
+				resultFilter.getVisibleQuestions().add(element.getId().toString());
+				resultFilter.getExportedQuestions().add(element.getId().toString());
+				
+				if (element.isDelphiElement()) {
+					resultFilter.getVisibleExplanations().add(element.getId().toString());
+					resultFilter.getExportedExplanations().add(element.getId().toString());
+					resultFilter.getVisibleDiscussions().add(element.getId().toString());
+					resultFilter.getExportedDiscussions().add(element.getId().toString());
+				}
+			}
+			
+			form.setStatistics(answerService.getStatisticsOrStartCreator(survey, resultFilter, true, false, false));
+			
+			logger.info("archiving statistics (Excel) of survey " + survey.getShortname());	
+			Export exportstats = new Export();
+			exportstats.setForArchiving(true);	
+			exportstats.setDate(new Date());
+			exportstats.setState(ExportState.Pending);		
+			exportstats.setUserId(user.getId());
+			exportstats.setName("archiveStats");
+			exportstats.setType(ExportType.Statistics);
+			exportstats.setFormat(ExportFormat.xls);
+			exportstats.setSurvey(published);
+			exportstats.setResultFilter(resultFilter);
+			exportService.startExport(form, exportstats, true, resources,new Locale("en"), null, folder.getPath() + Constants.PATH_DELIMITER + published.getUniqueId() + "statistics.xls", true);
+			if (exportstats.getState() == ExportState.Failed)
+			{
+				throw new MessageException("export failed, abort archiving");
+			}
+			
+			logger.info("archiving results (Excel) of survey " + survey.getShortname());	
+			Export export = new Export();
+			export.setDate(new Date());
+			export.setState(ExportState.Pending);		
+			export.setUserId(user.getId());
+			export.setName("archiveXLS");
+			export.setType(ExportType.Content);
+			export.setFormat(ExportFormat.xls);
+			export.setSurvey(published);
+			export.setResultFilter(resultFilter);
+			export.setForArchiving(true);			
+			exportService.startExport(form, export, true, resources,new Locale("en"), null, folder.getPath() + Constants.PATH_DELIMITER + published.getUniqueId() + "results.xls", true);
+			if (export.getState() == ExportState.Failed)
+			{
+				throw new MessageException("export failed, abort archiving");
+			}
+			
+			logger.info("archiving statistics (PDF) of survey " + survey.getShortname());
+			Export exportstatspdf = new Export();			
+			exportstatspdf.setForArchiving(true);
+			exportstatspdf.setDate(new Date());
+			exportstatspdf.setState(ExportState.Pending);		
+			exportstatspdf.setUserId(user.getId());
+			exportstatspdf.setName("archiveStats");
+			exportstatspdf.setType(ExportType.Statistics);
+			exportstatspdf.setFormat(ExportFormat.pdf);
+			exportstatspdf.setSurvey(published);
+			exportstatspdf.setResultFilter(resultFilter);
+			exportstatspdf = exportService.update(exportstatspdf); // needed as the pdf creation loads the export from the db	
+			exportService.startExport(form, exportstatspdf, true, resources,new Locale("en"), null, folder.getPath() + Constants.PATH_DELIMITER + published.getUniqueId() + "statistics.pdf", true);
+			if (exportstatspdf.getState() == ExportState.Failed)
+			{
+				throw new MessageException("export failed, abort archiving");
+			}
+			
+			
+		} else {
+			logger.info("archiving PDF of survey " + survey.getShortname());
+			
+			pdfService.createSurveyPDF(survey, survey.getLanguage().getCode(), new java.io.File(folder.getPath() + Constants.PATH_DELIMITER + survey.getUniqueId() + ".pdf"));
+		}
+		
+		session.flush();
+		
+		logger.info("deleting survey " + survey.getShortname());
+		
+		//make sure the archive exists before finally deleting the survey
+		if (target.exists())
+		{
+			surveyService.markDeleted(survey.getId(), survey.getOwner().getId(), survey.getShortname(), survey.getUniqueId(), !survey.getIsDraft() || survey.getIsPublished());
+		} else {
+			throw new MessageException("archive file not found, abort archiving");
+		}
+		
+		archive.setFinished(true);
+		
+		archive = (Archive) session.merge(archive);
+		archiveService.update(archive);
 	}
 }

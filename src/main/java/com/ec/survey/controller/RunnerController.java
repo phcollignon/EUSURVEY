@@ -796,7 +796,7 @@ public class RunnerController extends BasicController {
 
 		if (survey != null) {
 
-			Form f = new Form(survey, translationService.getTranslationsForSurvey(survey.getId(), true),
+			Form f = new Form(survey, translationService.getTranslationsForSurvey(survey.getId(), false),
 					survey.getLanguage(), resources, contextpath);
 
 			String lang = request.getParameter("lang");
@@ -2495,6 +2495,10 @@ public class RunnerController extends BasicController {
 				((Question)element).setIsDelphiQuestion(false);
 			}
 		}
+		
+		if (survey.getIsSelfAssessment()) {
+			selfassessmentService.initializeElements(result, survey);
+		}		
 				
 		for (Element element : result) {
 			if (foreditor && hasGlobalAdminRights) {
@@ -2526,9 +2530,6 @@ public class RunnerController extends BasicController {
 			}
 		}
 
-		if (survey.getIsSelfAssessment()) {
-			selfassessmentService.initializeElements(result, survey);
-		}
 		
 		return result;
 	}

@@ -51,6 +51,60 @@ public class SchemaService extends BasicService {
 	private DomainUpdater domainWorker;
 	
 	@Transactional
+	public void step119() {
+		Session session = sessionFactory.getCurrentSession();
+		Status status = getStatus();
+
+		String existing = settingsService.get(Setting.ArchiveOlderThan);
+		if (existing == null) {
+			Setting s = new Setting();
+			s.setKey(Setting.ArchiveOlderThan);
+			s.setValue("36");
+			s.setFormat("months");
+			session.saveOrUpdate(s);
+		}
+		
+		existing = settingsService.get(Setting.ArchiveNotChangedInLast);
+		if (existing == null) {
+			Setting s = new Setting();
+			s.setKey(Setting.ArchiveNotChangedInLast);
+			s.setValue("12");
+			s.setFormat("months");
+			session.saveOrUpdate(s);
+		}
+	
+		status.setDbversion(119);
+		session.saveOrUpdate(status);
+	}
+	
+	@Transactional
+	public void step118() {
+		Session session = sessionFactory.getCurrentSession();
+		Status status = getStatus();
+
+		String existing = settingsService.get(Setting.NightlyTaskStart);
+		if (existing == null) {
+			Setting s = new Setting();
+			s.setKey(Setting.NightlyTaskStart);
+			s.setValue("04:00");
+			s.setFormat("HH:mm");
+			session.saveOrUpdate(s);
+		}
+		
+		existing = settingsService.get(Setting.NightlyTaskLimit);
+		if (existing == null) {
+			Setting s = new Setting();
+			s.setKey(Setting.NightlyTaskLimit);
+			s.setValue("60");
+			s.setFormat("minutes");
+			session.saveOrUpdate(s);
+		}
+	
+		status.setDbversion(118);
+		session.saveOrUpdate(status);
+	}
+	
+	@Transactional
 	public void step117() {
 		Session session = sessionFactory.getCurrentSession();
 		Status status = getStatus();

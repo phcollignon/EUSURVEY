@@ -6,12 +6,18 @@ import com.ec.survey.model.*;
 import com.ec.survey.model.administration.GlobalPrivilege;
 import com.ec.survey.model.administration.LocalPrivilege;
 import com.ec.survey.model.administration.User;
+import com.ec.survey.model.chargeback.MonthlyCharge;
+import com.ec.survey.model.chargeback.OrganisationCharge;
+import com.ec.survey.model.chargeback.PublishedSurvey;
 import com.ec.survey.model.selfassessment.SACriterion;
 import com.ec.survey.model.survey.*;
 import com.ec.survey.model.survey.base.File;
 import com.ec.survey.service.ReportingService.ToDo;
 import com.ec.survey.tools.*;
 import com.ec.survey.tools.activity.ActivityRegistry;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.apache.commons.io.IOUtils;
 import org.codehaus.plexus.util.FileUtils;
 import org.hibernate.Hibernate;
@@ -1433,20 +1439,20 @@ public class SurveyService extends BasicService {
 	 * Creates a copy of the survey and save it as non-draft survey
 	 */
 	@Transactional
-	public Survey publish(Survey draftSurvey, int pnumberOfAnswerSets, int pnumberOfAnswerSetsPublished,
+	public Survey publish(Survey originalSurvey, int pnumberOfAnswerSets, int pnumberOfAnswerSetsPublished,
 			boolean deactivateAutoPublishing, int userId, boolean resetSourceIds, boolean resetSurvey)
 			throws Exception {
 		Session session = sessionFactory.getCurrentSession();
-		boolean alreadyPublished = draftSurvey.getIsPublished();
+		boolean alreadyPublished = !originalSurvey.getIsDraft() || originalSurvey.getIsPublished();
 
 		if (resetSurvey) {
-			session.evict(draftSurvey);
-			draftSurvey = (Survey) session.merge(draftSurvey);
+			session.evict(originalSurvey);
+			originalSurvey = (Survey) session.merge(originalSurvey);
 		}
 		
-		boolean firstPublicationForUser = !getUserHasPublishedSurveys(draftSurvey.getOwner().getId());
+		boolean firstPublicationForUser = !getUserHasPublishedSurveys(originalSurvey.getOwner().getId());
 
-		Survey publishedSurvey = draftSurvey.copy(this, draftSurvey.getOwner(), fileDir, true, pnumberOfAnswerSets,
+		Survey publishedSurvey = originalSurvey.copy(this, originalSurvey.getOwner(), fileDir, true, pnumberOfAnswerSets,
 				pnumberOfAnswerSetsPublished, true, resetSourceIds, true, null, null);
 		publishedSurvey.setIsDraft(false); // this means it is not a draft
 		if (deactivateAutoPublishing) {
@@ -1454,7 +1460,7 @@ public class SurveyService extends BasicService {
 		}
 		publishedSurvey = update(publishedSurvey, false, true, false, userId);
 
-		this.computeTrustScore(draftSurvey);
+		this.computeTrustScore(originalSurvey);
 
 		// copy translations
 		Map<String, String> publishedSurveyKeys = new HashMap<>();
@@ -1495,9 +1501,9 @@ public class SurveyService extends BasicService {
 
 			}
 		}
-		List<Translations> draftTranslationsList = translationService.getTranslationsForSurvey(draftSurvey.getId(), true);
+		List<Translations> draftTranslationsList = translationService.getTranslationsForSurvey(originalSurvey.getId(), true);
 		for (Translations draftTranslations : draftTranslationsList) {
-			if (!draftTranslations.getLanguage().getCode().equalsIgnoreCase(draftSurvey.getLanguage().getCode())) {
+			if (!draftTranslations.getLanguage().getCode().equalsIgnoreCase(originalSurvey.getLanguage().getCode())) {
 				Translations translationsCopy = new Translations();
 				translationsCopy.setActive(draftTranslations.getActive());
 				translationsCopy.setLanguage(draftTranslations.getLanguage());
@@ -1644,31 +1650,43 @@ public class SurveyService extends BasicService {
 			} 
 		}
 
-		Survey ob = session.get(Survey.class, draftSurvey.getId());
+		Survey ob = session.get(Survey.class, originalSurvey.getId());
 
 		ob.setIsPublished(true);
 		ob.setHasPendingChanges(false);
 
 		if (deactivateAutoPublishing) {
 			ob.setAutomaticPublishing(false);
-			draftSurvey.setAutomaticPublishing(false);
+			originalSurvey.setAutomaticPublishing(false);
 		}
 
-		draftSurvey.setHasPendingChanges(false);
+		originalSurvey.setHasPendingChanges(false);
 
 		session.update(ob);
-		draftSurvey.setIsPublished(true);
+		originalSurvey.setIsPublished(true);
 
-		if (!alreadyPublished)
-			reportingService.addToDo(ToDo.NEWSURVEY, draftSurvey.getUniqueId(), null);
+		if (!alreadyPublished) {
+			reportingService.addToDo(ToDo.NEWSURVEY, originalSurvey.getUniqueId(), null);
+			chargePublishedSurvey(originalSurvey.getUniqueId(), originalSurvey.getOrganisation());
+		}
 		
-		if (firstPublicationForUser && draftSurvey.getOwner().getGlobalPrivileges().get(GlobalPrivilege.ECAccess) == 0) {
-			sendFirstPublishedSurveyMail(draftSurvey);
+		if (firstPublicationForUser && originalSurvey.getOwner().getGlobalPrivileges().get(GlobalPrivilege.ECAccess) == 0) {
+			sendFirstPublishedSurveyMail(originalSurvey);
 		}
 
 		return publishedSurvey;
 	}
 	
+	@Transactional
+	private void chargePublishedSurvey(String uniqueId, String organisation) {
+		Session session = sessionFactory.getCurrentSession();
+		PublishedSurvey ps = new PublishedSurvey();
+		ps.setSurveyUID(uniqueId);
+		ps.setPublished(new Date());
+		ps.setOrganisation(organisation);
+		session.save(ps);		
+	}
+
 	public void sendFirstPublishedSurveyMail(Survey survey) throws Exception {
 		String body = "<b>SURVEY MODERATION</b><br />" +
 				"<br />" +
@@ -2179,6 +2197,17 @@ public class SurveyService extends BasicService {
 		}
 	}
 
+	// special case: old surveys can share logo file references (those lead to db constraint exceptions during deletion)
+	private void clearLogoIfReferencedByOtherSurveys(Survey s) {
+		if (s.getLogo() != null) {
+			List<String> surveyUIDs = getSurveyUIDsWithLogo(s.getLogo().getId());
+			if (surveyUIDs.size() > 1) {
+				// more than one survey uses this logo file
+				s.setLogo(null);
+			}
+		}		
+	}
+
 	private void deleteSurveyData(int id, boolean deleteAnswers, boolean deleteAccesses, String uid,
 			boolean deleteLogs) throws IOException {
 		Session session = sessionFactory.getCurrentSession();
@@ -2272,7 +2301,7 @@ public class SurveyService extends BasicService {
 		}
 	}
 
-	@Transactional
+	@Transactional(propagation = Propagation.REQUIRES_NEW)
 	public void delete(int id, boolean deleteLogs, boolean deleteFileMappings) throws Exception {
 		deleteNoTransaction(id, deleteLogs, deleteFileMappings);
 	}
@@ -2281,6 +2310,7 @@ public class SurveyService extends BasicService {
 		Session session = sessionFactory.getCurrentSession();
 
 		Survey s = this.getSurvey(id, false, false, false, false);
+		String uid = s.getUniqueId();
 
 		List<Integer> surveyIDs = surveyService.getAllSurveyVersions(s.getShortname(), s.getUniqueId());
 		fileService.deleteFilesForSurveys(s.getUniqueId());
@@ -2292,14 +2322,14 @@ public class SurveyService extends BasicService {
 		if (deleteFileMappings) {
 			deleteFileMappings(surveyIDs);
 		}
-
+		
 		// delete draft
 		Map<String, Integer> referencedFiles = s.getReferencedFileUIDs(contextpath);
-		deleteSurveyData(id, true, true, s.getUniqueId(), deleteLogs);
-		session.flush();
+		deleteSurveyData(id, true, true, s.getUniqueId(), deleteLogs);		
+		clearLogoIfReferencedByOtherSurveys(s);
+		
 		session.delete(s);
-		session.flush();
-
+	
 		for (Entry<String, Integer> entry : referencedFiles.entrySet()) {
 			if (entry.getValue() == null) {
 				// delete files belonging to images and background documents
@@ -2308,21 +2338,17 @@ public class SurveyService extends BasicService {
 		}
 
 		// delete published versions
-		Survey published = getSurveyByUniqueId(s.getUniqueId(), false, false);
-		if (published != null) {
-			surveyIDs = this.getAllSurveyVersions(published.getId());
-			for (Integer sid : surveyIDs) {
-				s = this.getSurvey(sid, false, false, false, false);
-				referencedFiles = s.getReferencedFileUIDs(contextpath);
-				deleteSurveyData(s.getId(), true, true, s.getUniqueId(), deleteLogs);
-				session.flush();
-				session.delete(s);
-				session.flush();
-				for (Entry<String, Integer> entry : referencedFiles.entrySet()) {
-					if (entry.getValue() == null) {
-						// delete files belonging to images and background documents
-						fileService.deleteIfNotReferenced(entry.getKey(), s.getUniqueId());
-					}
+		surveyIDs = this.getAllPublishedSurveyVersions(uid);
+		for (Integer sid : surveyIDs) {
+			s = this.getSurvey(sid, false, false, false, false);
+			referencedFiles = s.getReferencedFileUIDs(contextpath);
+			deleteSurveyData(s.getId(), true, true, s.getUniqueId(), deleteLogs);
+			clearLogoIfReferencedByOtherSurveys(s);
+			session.delete(s);
+			for (Entry<String, Integer> entry : referencedFiles.entrySet()) {
+				if (entry.getValue() == null) {
+					// delete files belonging to images and background documents
+					fileService.deleteIfNotReferenced(entry.getKey(), s.getUniqueId());
 				}
 			}
 		}
@@ -2338,6 +2364,14 @@ public class SurveyService extends BasicService {
 		}
 
 		reportingService.addToDo(ToDo.DELETEDSURVEY, s.getUniqueId(), null);
+	}
+
+	@Transactional(readOnly = true)
+	private List<String> getSurveyUIDsWithLogo(Integer id) {
+		Session session = sessionFactory.getCurrentSession();
+		Query<String> query = session.createQuery("SELECT DISTINCT s.uniqueId FROM Survey s where s.logo.id = :id", String.class);
+		query.setParameter("id", id);
+		return query.list();
 	}
 
 	private void deleteFileMappings(List<Integer> surveyIDs) {
@@ -2944,7 +2978,14 @@ public class SurveyService extends BasicService {
 		for (Translations tOriginal : translations) {
 			Translations t = new Translations();
 			t.setActive(tOriginal.getActive());
-			t.setLanguage(tOriginal.getLanguage());
+			
+			Language objLang = surveyService.getLanguage(tOriginal.getLanguage().getCode());
+			if (objLang == null) {
+				objLang = new Language(tOriginal.getLanguage().getCode(), tOriginal.getLanguage().getName(),
+						tOriginal.getLanguage().getEnglishName(), false);
+			}
+			
+			t.setLanguage(objLang);
 			if (newTitle) {
 				if (survey.getLanguage().getCode().equals(tOriginal.getLanguage().getCode())) {
 					t.setTitle(survey.getTitle());
@@ -3308,8 +3349,9 @@ public class SurveyService extends BasicService {
 		if (resultAccess != null) {
 			hql += " AND a.owner = :user"; 
 		}
-		
-		if (order != null) {
+
+		//avoid SQL Injection by limiting possible values you can order by
+		if (order != null && ResultAccess.getOrderFields().contains(order)) {
 			hql += " ORDER BY a." + order + " DESC";
 		}
 		
@@ -4210,7 +4252,7 @@ public class SurveyService extends BasicService {
 	@Transactional(readOnly = false)
 	public void unmarkAsArchived(String uid) {
 		Session session = sessionFactory.getCurrentSession();
-		Query<Survey> query = session.createQuery("UPDATE Survey s SET s.archived = 0 WHERE s.uniqueId = :uid")
+		Query<Survey> query = session.createQuery("UPDATE Survey s SET s.archived = 0, isDeleted = 0 WHERE s.uniqueId = :uid")
 				.setParameter("uid", uid);
 		query.executeUpdate();
 	}
@@ -5961,6 +6003,119 @@ public class SurveyService extends BasicService {
 
 		return s.toString();
 
+	}	
+	
+	private void analyzeCharge(String hql, String code, int year, int month, int monthEnd, boolean v1, boolean v1_2, boolean v2, Map<String, OrganisationCharge> organisations) {
+		Session session = sessionFactory.getCurrentSession();
+		boolean skipCode =  code.equalsIgnoreCase("all");
+		Query<?> query = session.createQuery(hql);
+		query.setParameter("year", year);
+		if (month > 0) query.setParameter("month", month);
+		if (monthEnd > 0) query.setParameter("monthEnd", monthEnd);
+		if (!skipCode) query.setParameter("org", code);
+		List<?> res = query.list();
+		for (Object o : res) {
+			Object[] a = (Object[]) o;
+			String organisation = (String)a[0];
+			
+			if (com.mysql.cj.util.StringUtils.isNullOrEmpty(organisation)) {
+				organisation = "unset";
+			}
+			
+			Date published = (Date)a[1];
+			Calendar calendar = new GregorianCalendar();
+			calendar.setTime(published);
+			int mon = calendar.get(Calendar.MONTH) + 1;
+			String monthPublished = (mon < 10 ? "0" : "") + mon + " " + calendar.get(Calendar.YEAR);
+			
+			String surveyUID = (String)a[2];
+			
+			if (!organisations.containsKey(organisation)) {
+				OrganisationCharge c = new OrganisationCharge();
+				c.name = organisation;				
+				organisations.put(organisation, c);
+			}
+			
+			OrganisationCharge c = organisations.get(organisation);
+			if (!c.monthly.containsKey(monthPublished)) {
+				MonthlyCharge m = new MonthlyCharge();
+				c.monthly.put(monthPublished, m);
+			}
+			
+			MonthlyCharge mo = c.monthly.get(monthPublished);
+			
+			if (v1) {			
+				mo.v1++;
+			}
+			
+			if (v1_2) {
+				// only count if surveys still exists
+				Survey survey = getSurveyByUniqueId(surveyUID, false, true);
+				if (survey != null && !survey.getIsDeleted() && !survey.getArchived())
+				{
+					mo.v1_2++;
+				}
+			}
+			
+			if (v2) {			
+				mo.v2++;
+			}
+		}
+	}
+	
+	public String organisationReportJSON(String code, int year, int month, int monthEnd, int minPublishedSurveys) throws JsonProcessingException {	
+		Collection<OrganisationCharge> organisations = surveyService.getOrganisationCharges(code, year, month, monthEnd, minPublishedSurveys);
+		
+		ObjectMapper mapper = new ObjectMapper();
+		String stringResult = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(organisations);
+		
+		return stringResult;
+	}
+
+	public Collection<OrganisationCharge> getOrganisationCharges(String code, int year, int month, int monthEnd, int minPublishedSurveys) {
+		Map<String, OrganisationCharge> organisations = new HashMap<String, OrganisationCharge>();			
+			
+		boolean skipCode =  code.equalsIgnoreCase("all");
+		
+		String monthPart = "";
+		if (monthEnd > 0 && month > 0) {
+			monthPart = " AND MONTH(published) >= :month AND MONTH(published) <= :monthEnd";
+		} else if (month > 0) {
+			monthPart = " AND MONTH(published) = :month";
+		}	
+		
+		// get published surveys
+		String hql = "SELECT organisation, published, surveyUID FROM PublishedSurvey WHERE YEAR(published) = :year" + monthPart + (!skipCode ? " AND organisation = :org" : "");
+			
+		analyzeCharge(hql, code, year, month, monthEnd, true, false, false, organisations);
+		
+		// get multi-annual published surveys
+		hql = "SELECT organisation, published, surveyUID FROM PublishedSurvey WHERE YEAR(published) < :year" + monthPart + (!skipCode ? " AND organisation = :org" : "");
+		analyzeCharge(hql, code, year, month, monthEnd, false, true, false, organisations);
+				
+		// get submitted contributions
+		monthPart = "";
+		if (monthEnd > 0 && month > 0) {
+			monthPart = " AND MONTH(submitted) >= :month AND MONTH(submitted) <= :monthEnd";
+		} else if (month > 0) {
+			monthPart = " AND MONTH(submitted) = :month";
+		}
+		hql = "SELECT organisation, submitted, surveyUID FROM SubmittedContribution WHERE YEAR(submitted) = :year" + monthPart + (!skipCode ? " AND organisation = :org" : "");
+		analyzeCharge(hql, code, year, month, monthEnd, false, false, true, organisations);
+		
+		if (minPublishedSurveys == 0) {
+			return organisations.values();
+		}
+		
+		Collection<OrganisationCharge> filteredResult = new ArrayList<OrganisationCharge>();
+		
+		for (OrganisationCharge organisationCharge : organisations.values()) {
+			if (organisationCharge.getTotal_v1() >= minPublishedSurveys) {
+				filteredResult.add(organisationCharge);
+			}
+		}
+						
+		return filteredResult;
 	}
 
 	public OrganisationResult getSurveysByOrganisation(String code) {
@@ -6212,4 +6367,47 @@ public class SurveyService extends BasicService {
 		
 		return false;
 	}
+
+	@Transactional
+	public List<Survey> getSurveysMarkedArchived(int limit, int skip) {
+		Session session = sessionFactory.getCurrentSession();
+		String sql = "FROM Survey s WHERE s.isDraft = true AND s.archived = true and s.isDeleted = false ORDER BY s.id";
+
+		Query<Survey> query = session.createQuery(sql, Survey.class);
+		List<Survey> surveys = query.setReadOnly(true).setFirstResult(skip).setMaxResults(limit).list();
+		return surveys;
+	}
+	
+	@Transactional
+	public List<Survey> getSurveysToBeMarkedArchived() {
+		Session session = sessionFactory.getCurrentSession();
+		String sql = "FROM Survey s WHERE s.isDraft = true AND s.archived = false and s.isDeleted = false and s.created < :created and s.updated < :updated";
+		
+		String olderThanMonths = settingsService.get(Setting.ArchiveOlderThan);
+		String notChangedInMonths = settingsService.get(Setting.ArchiveNotChangedInLast);
+		
+		Calendar c = Calendar.getInstance();
+		c.setTime(new Date());
+		c.add(Calendar.MONTH, -1 * Integer.parseInt(olderThanMonths));
+		Date created = c.getTime();
+		
+		c.setTime(new Date());
+		c.add(Calendar.MONTH, -1 * Integer.parseInt(notChangedInMonths));
+		Date updated = c.getTime();
+
+		Query<Survey> query = session.createQuery(sql, Survey.class).setParameter("created", created).setParameter("updated", updated);
+		List<Survey> allSurveys = query.setReadOnly(true).list();
+		List<Survey> surveys = new ArrayList<>();
+		
+		for (Survey survey: allSurveys) {
+			Date newestAnswerDate = answerService.getNewestAnswerDate(survey.getId());
+			if (newestAnswerDate == null || newestAnswerDate.before(updated)) {
+				initializeSurvey(survey);
+				surveys.add(survey);
+			}
+		}
+		
+		return surveys;
+	}
+
 }
