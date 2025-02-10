@@ -34,8 +34,17 @@
 						<c:otherwise>
 							<a href="<c:url value="/home/publicsurveys"/>"><spring:message code="header.AllPublicSurveys" /></a>
 						</c:otherwise>
-					</c:choose>		
+
+					</c:choose>
+
+					<span style="font-size: 12px; color: #fff;">
+
+						&nbsp; : [ &nbsp;<%= System.getenv("HOSTNAME") %>&nbsp; ]
+
+					</span>		
+
 					&#160;&#160;
+
 				</div>
 					
 				<div style="float: right; line-height: 22px;">		
