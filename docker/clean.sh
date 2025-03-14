@@ -6,8 +6,10 @@ mkdir -p /path/on/host/surveys
 mkdir -p /path/on/host/users
 mkdir -p /path/on/host/archive
 sudo chmod -R 777 /path/on/host
-docker-compose down -v   
+docker stop eusurvey-mysql                                    
+docker rm eusurvey-mysql
 
+docker-compose down -v   
 python redis/delete.py
 
 
