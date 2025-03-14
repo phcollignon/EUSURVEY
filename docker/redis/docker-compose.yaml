@@ -10,8 +10,8 @@ services:
       - '6379:6379'
     command: ["redis-server", "--requirepass", ""]
     networks:
-      - docker_eusurvey-network
+      - eusurvey-network  
 
 networks:
-  docker_eusurvey-network:
+  eusurvey-network:
     external: true

@@ -17,6 +17,7 @@ commonTomcatConfig: &commonTomcatConfig
     repository: circabc/tomcat-eusurvey-server-k8s
     tag: latest
     pullPolicy: IfNotPresent
+
   resources:
     requests:
       memory: "1Gi"  
@@ -110,22 +111,6 @@ commonTomcatConfig: &commonTomcatConfig
     - name: cache-config-volume
       secret:
         secretName: '{{ .Release.Name }}-tomcat-cache-config-secret'  
-
-  initContainers:
-    - name: copy-eusurvey-war
-      image: ghcr.io/circabc/tomcat-eusurvey-server-k8s:latest
-      imagePullPolicy: IfNotPresent 
-      command:
-        - /bin/sh
-        - -c
-        - |
-          if [ ! -d /opt/bitnami/tomcat/webapps/eusurvey ]; then
-            mv /opt/bitnami/tomcat/webapps/eusurvey.war /usr/local/share/eusurvey.war;
-          fi
-  
-      volumeMounts:
-        - name: usr-local-share-volume  
-          mountPath: /usr/local/share
 
   extraEnvVars:
     - name: JAVA_OPTS

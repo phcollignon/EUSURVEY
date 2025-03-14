@@ -179,7 +179,7 @@ commonCopyEusurveyWar: &copy-eusurvey-war
 
 tomcat:
   <<: *commonTomcatConfig
-  replicaCount: 2
+  replicaCount: 1
   extraEnvVars:
     - name: TASK_TYPE
       value: ""
