@@ -170,7 +170,7 @@ commonCopyEusurveyWar: &copy-eusurvey-war
     - /bin/sh
     - -c
     - |
-      if [ ! -d /opt/bitnami/tomcat/webapps/eusurvey ]; then
+      if [ -f /opt/bitnami/tomcat/webapps/eusurvey.war ]; then
         mv /opt/bitnami/tomcat/webapps/eusurvey.war /usr/local/share/eusurvey.war;
       fi
   volumeMounts:
