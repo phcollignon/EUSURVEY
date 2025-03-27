@@ -157,7 +157,7 @@ commonWaitForFirstTomcat: &wait-for-first-tomcat
     - -c
     - |
       echo "Waiting for the first tomcat instance to be ready...";
-      while ! wget -q --spider http://eusurvey-tomcat:8080; do
+      while ! wget -q --spider http://eusurvey-tomcat:8080/eusurvey; do
         echo "Waiting for the first tomcat instance to be ready...";
         sleep 5;
       done;
